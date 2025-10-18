@@ -1,0 +1,35 @@
+{
+  "detection_thresholds": {
+    "high_confidence": 0.8,
+    "medium_confidence": 0.6,
+    "low_confidence": 0.4
+  },
+  "severity_weights": {
+    "critical": 1.0,
+    "high": 0.8,
+    "medium": 0.6,
+    "low": 0.4
+  },
+  "visual_features": {
+    "skin_conditions": [
+      "color_changes",
+      "texture_changes",
+      "lesions"
+    ],
+    "hoof_conditions": [
+      "swelling",
+      "discoloration",
+      "deformities"
+    ],
+    "eye_conditions": [
+      "discharge",
+      "redness",
+      "cloudiness"
+    ],
+    "general_health": [
+      "body_condition",
+      "posture",
+      "alertness"
+    ]
+  }
+}

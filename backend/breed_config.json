@@ -1,0 +1,45 @@
+{
+  "breed_characteristics": {
+    "gir": {
+      "color_patterns": [
+        "brown",
+        "white",
+        "spotted"
+      ],
+      "horn_shape": "curved",
+      "body_type": "medium",
+      "distinctive_features": [
+        "hump",
+        "drooping_ears"
+      ]
+    },
+    "sahival": {
+      "color_patterns": [
+        "red",
+        "brown"
+      ],
+      "horn_shape": "straight",
+      "body_type": "medium",
+      "distinctive_features": [
+        "compact_body",
+        "short_horns"
+      ]
+    },
+    "murrah": {
+      "color_patterns": [
+        "black"
+      ],
+      "horn_shape": "curved",
+      "body_type": "large",
+      "distinctive_features": [
+        "massive_body",
+        "short_horns"
+      ]
+    }
+  },
+  "confidence_thresholds": {
+    "high": 0.8,
+    "medium": 0.6,
+    "low": 0.4
+  }
+}

@@ -149,34 +149,49 @@ def home_page():
 
 def analysis_page():
     """Analysis page for uploading and processing images."""
-    
+
     st.markdown("## Image Analysis")
-    
+
+    # Backend connection test
+    with st.expander("🔧 Backend Connection Test", expanded=False):
+        if st.button("Test Backend Connection"):
+            try:
+                response = requests.get(f"{API_BASE_URL.replace('/api/v1', '')}/health", timeout=5)
+                if response.status_code == 200:
+                    st.success(f"✅ Backend is running! {response.json()}")
+                else:
+                    st.error(f"❌ Backend returned status {response.status_code}")
+            except requests.exceptions.ConnectionError:
+                st.error(f"❌ Cannot connect to backend at {API_BASE_URL}")
+                st.info("💡 Make sure to run: `cd AutoATC/backend && python simple_main.py`")
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
+
     # File upload
     uploaded_file = st.file_uploader(
         "Choose an image file",
         type=['jpg', 'jpeg', 'png', 'bmp'],
         help="Upload an image of a cattle or buffalo for analysis"
     )
-    
+
     if uploaded_file is not None:
         # Display uploaded image
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", use_column_width=True)
-        
+
         # Analysis options
         st.markdown("### Analysis Options")
-        
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
             include_breed = st.checkbox("Include Breed Classification", value=True)
             include_disease = st.checkbox("Include Disease Detection", value=True)
-        
+
         with col2:
             include_measurements = st.checkbox("Include Body Measurements", value=True)
             animal_id = st.text_input("Animal ID (optional)", value="")
-        
+
         # Analyze button
         if st.button("🔍 Analyze Image", type="primary"):
             with st.spinner("Analyzing image..."):
@@ -187,11 +202,11 @@ def analysis_page():
                     include_disease,
                     include_measurements
                 )
-                
+
                 if result:
                     display_analysis_results(result)
                 else:
-                    st.error("Analysis failed. Please try again.")
+                    st.warning("⚠️ Analysis failed. Check the error messages above.")
 
 def results_page():
     """Results page for viewing analysis results."""
@@ -382,14 +397,14 @@ def check_api_status(api_url: str = API_BASE_URL) -> bool:
     except:
         return False
 
-def analyze_image(uploaded_file, animal_id: str = None, include_breed: bool = True, 
+def analyze_image(uploaded_file, animal_id: str = None, include_breed: bool = True,
                  include_disease: bool = True, include_measurements: bool = True) -> dict:
     """Analyze uploaded image."""
     try:
         # Convert image to base64
         image_bytes = uploaded_file.read()
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-        
+
         # Prepare request data
         data = {
             "image_data": image_base64,
@@ -399,71 +414,184 @@ def analyze_image(uploaded_file, animal_id: str = None, include_breed: bool = Tr
             "include_disease_detection": include_disease,
             "include_measurements": include_measurements
         }
-        
+
+        # Display debug info
+        st.info(f"📡 Sending request to: {API_BASE_URL}/analyze")
+        st.info(f"📦 Image size: {len(image_bytes)} bytes")
+
         # Make API request
-        response = requests.post(f"{API_BASE_URL}/analyze", json=data, timeout=60)
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            st.error(f"Analysis failed: {response.text}")
+        try:
+            response = requests.post(f"{API_BASE_URL}/analyze", json=data, timeout=60)
+
+            # Debug response
+            st.info(f"📨 Response status: {response.status_code}")
+
+            if response.status_code == 200:
+                result = response.json()
+                st.success("✅ Analysis completed successfully!")
+                return result
+            else:
+                error_detail = response.text
+                try:
+                    error_json = response.json()
+                    error_detail = error_json.get('detail', response.text)
+                except:
+                    pass
+                st.error(f"❌ Analysis failed (Status {response.status_code}): {error_detail}")
+                return None
+
+        except requests.exceptions.ConnectionError as e:
+            st.error(f"❌ Connection Error: Cannot connect to backend at {API_BASE_URL}")
+            st.error("Please ensure the backend is running on http://localhost:8000")
+            st.code(f"Error details: {str(e)}")
             return None
-            
+        except requests.exceptions.Timeout as e:
+            st.error(f"❌ Timeout Error: Request took longer than 60 seconds")
+            st.code(f"Error details: {str(e)}")
+            return None
+        except requests.exceptions.RequestException as e:
+            st.error(f"❌ Request Error: {str(e)}")
+            return None
+
     except Exception as e:
-        st.error(f"Error analyzing image: {str(e)}")
+        st.error(f"❌ Error analyzing image: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 def display_analysis_results(result: dict):
     """Display analysis results."""
-    data = result.get('data', {})
-    
+    # Handle different response formats
+    if 'data' in result:
+        data = result.get('data', {})
+    else:
+        data = result
+
+    st.success("✅ Analysis Complete!")
+
+    # Debug: Show raw response structure
+    with st.expander("🔍 Debug: Raw Response", expanded=False):
+        st.json(result)
+
     # Basic information
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         st.metric("Animal Type", data.get('animal_type', 'Unknown'))
-        st.metric("Confidence", f"{data.get('confidence', 0):.2%}")
-    
+        confidence = data.get('confidence', 0)
+        if isinstance(confidence, (int, float)):
+            st.metric("Confidence", f"{confidence:.2%}")
+        else:
+            st.metric("Confidence", str(confidence))
+
     with col2:
-        st.metric("ATC Score", data.get('atc_score', {}).get('score', 'N/A'))
-        st.metric("ATC Grade", data.get('atc_score', {}).get('grade', 'N/A'))
-    
+        atc_score_data = data.get('atc_score', {})
+        score = atc_score_data.get('score', atc_score_data.get('overall_score', 'N/A'))
+        st.metric("ATC Score", score)
+        st.metric("ATC Grade", atc_score_data.get('grade', 'N/A'))
+
     with col3:
-        st.metric("Breed", data.get('breed_classification', {}).get('breed', 'Unknown'))
-        st.metric("Processing Time", f"{data.get('processing_time', 0):.2f}s")
-    
+        breed_data = data.get('breed_classification', {})
+        breed = breed_data.get('breed', breed_data.get('predicted_breed', 'Unknown'))
+        st.metric("Breed", breed)
+        processing_time = data.get('processing_time', 0)
+        st.metric("Processing Time", f"{processing_time:.2f}s")
+
     # Detailed results
-    tabs = st.tabs(["Measurements", "ATC Details", "Breed Info", "Diseases"])
-    
+    tabs = st.tabs(["📏 Measurements", "🏆 ATC Details", "🧬 Breed Info", "🏥 Health"])
+
     with tabs[0]:
+        st.markdown("### Body Measurements")
         measurements = data.get('measurements', {})
         if measurements:
-            st.json(measurements)
+            # Display in a nice table format
+            meas_data = []
+            for key, value in measurements.items():
+                if isinstance(value, (int, float)):
+                    meas_data.append({"Measurement": key.replace('_', ' ').title(), "Value": f"{value:.2f}"})
+                else:
+                    meas_data.append({"Measurement": key.replace('_', ' ').title(), "Value": str(value)})
+            if meas_data:
+                st.table(pd.DataFrame(meas_data))
+            else:
+                st.json(measurements)
         else:
             st.info("No measurements available")
-    
+
     with tabs[1]:
+        st.markdown("### ATC Scoring Details")
         atc_score = data.get('atc_score', {})
         if atc_score:
-            st.json(atc_score)
+            # Display factors
+            factors = atc_score.get('factors', {})
+            if factors:
+                st.markdown("#### Scoring Factors")
+                for factor, score in factors.items():
+                    st.progress(score / 100, text=f"{factor.replace('_', ' ').title()}: {score:.1f}/100")
+
+            # Display recommendations
+            recommendations = atc_score.get('recommendations', [])
+            if recommendations:
+                st.markdown("#### Recommendations")
+                for rec in recommendations:
+                    st.write(f"• {rec}")
+
+            # Show full data
+            with st.expander("Full ATC Data"):
+                st.json(atc_score)
         else:
             st.info("No ATC score available")
-    
+
     with tabs[2]:
+        st.markdown("### Breed Classification")
         breed_info = data.get('breed_classification', {})
         if breed_info:
-            st.json(breed_info)
+            # Main breed
+            main_breed = breed_info.get('breed', breed_info.get('predicted_breed', 'Unknown'))
+            breed_conf = breed_info.get('confidence', 0)
+            st.write(f"**Primary Breed:** {main_breed}")
+            st.progress(breed_conf, text=f"Confidence: {breed_conf:.2%}")
+
+            # Alternative breeds
+            alternatives = breed_info.get('alternative_breeds', [])
+            if alternatives:
+                st.markdown("#### Alternative Breeds")
+                for alt in alternatives:
+                    breed_name = alt.get('breed', 'Unknown')
+                    alt_conf = alt.get('confidence', 0)
+                    st.write(f"• {breed_name}: {alt_conf:.2%}")
+
+            # Show full data
+            with st.expander("Full Breed Data"):
+                st.json(breed_info)
         else:
             st.info("No breed information available")
-    
+
     with tabs[3]:
+        st.markdown("### Health & Disease Detection")
+        # Check multiple possible keys for diseases
         diseases = data.get('diseases', [])
+        disease_detection = data.get('disease_detection', {})
+        if disease_detection:
+            diseases = disease_detection.get('diseases_detected', diseases)
+            health_score = disease_detection.get('health_score')
+            if health_score:
+                st.metric("Health Score", f"{health_score:.1f}/100")
+
+            disease_recs = disease_detection.get('recommendations', [])
+            if disease_recs:
+                st.markdown("#### Recommendations")
+                for rec in disease_recs:
+                    st.write(f"• {rec}")
+
         if diseases:
+            st.markdown("#### Detected Conditions")
             for disease in diseases:
-                st.write(f"**{disease.get('name', 'Unknown')}** - {disease.get('severity', 'Unknown')}")
-                st.write(disease.get('description', ''))
+                st.write(f"**{disease.get('name', 'Unknown')}** - Severity: {disease.get('severity', 'Unknown')}")
+                if disease.get('description'):
+                    st.write(disease.get('description', ''))
         else:
-            st.info("No diseases detected")
+            st.success("✅ No diseases detected - Animal appears healthy!")
 
 def get_recent_analyses() -> list:
     """Get recent analyses (mock data)."""
